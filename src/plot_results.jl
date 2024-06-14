@@ -56,6 +56,44 @@ function plot_cluster_centers(;K::Integer, config::Dict, FullData, CountryData, 
     return p
 end
 
+
+function plot_variance_cluster(;K::Integer, var_temp::Dict,)
+
+    p = make_subplots(rows=K, 
+    cols=1, 
+    vertical_spacing=0.02, 
+    #column_titles=["Day$(i)_w_$(round(weights[i]/365,digits=2))" for i in 1:K], row_titles=[split(i, "TS_")[end] for i in collect(keys(CountryData))]
+    )
+
+    color_dict = Dict(t => ColorSchemes.tab20.colors[i] for (i,t) in enumerate(keys(var_temp[K])))
+
+
+    for d in keys(var_temp)
+        for t in keys(var_temp[d])
+            add_trace!(p, 
+            box(y=var_temp[d][t],
+            name=t, 
+            showlegend=false,
+            jitter=0.5,
+            boxpoints="all",
+            marker_color=color_dict[t],
+            fillcolor=color_dict[t],
+            whiskerwidth=0.2,
+            ), 
+            row=d, 
+            col=1)
+        end
+    end
+
+    p.plot.layout.height = 200*K  # Set the width of the plot (in pixels)
+    return p
+end
+
+
+
+
+
+
 function plot_heatmaps(; full_data, clustered_data)
     p = make_subplots(rows=1, 
     cols=2, 

@@ -79,8 +79,39 @@ function make_vector(; array:: JuMP.Containers.DenseAxisArray)
 end
 
 
+"""
+    calculate_variance_per_cluster(; CountryData::Dict, k::Integer, country::String) -> Dict
 
+Calculate the variance for different time series data per cluster and return a dictionary containing these variances.
 
+# Arguments
+- `CountryData::Dict`: A dictionary where the keys are strings representing different time series (e.g., "TS_LOAD", "TS_HEAT_LOW", "TS_HEAT_HIGH") and the values are 2D arrays. Each array's rows correspond to different time points, and the columns correspond to different countries.
+- `k::Integer`: The number of clusters.
+- `cl::Vector{Int64}`: Mapping which days belong to which clusters.
+- `country::String`: The name of the country for which the variance is to be calculated.
+
+# Returns
+- `Dict`: A dictionary where each key is an integer representing a cluster and the value is another dictionary. This nested dictionary has the same keys as `CountryData`, and each key maps to a list of variances calculated for the specified country.
+
+"""
+
+function calculate_variance_per_cluster(; CountryData:: Dict, k::Integer, country::String, cl::Vector{Int64})
+
+    v = Dict(t => [] for t in collect(keys(CountryData)))
+    temp_dict = Dict(d => Dict(t => [] for t in collect(keys(CountryData))) for d in 1:k)
+    
+    # Calculate and append variance
+    for (k, m) in enumerate(0:24:8735)
+        for t in collect(keys(CountryData))
+            y = var(CountryData[t][m+1:m+24, country])
+            push!(temp_dict[cl[k]][t], y)
+            #y = CountryData[t][m+1:m+24, country]
+            #append!(temp_dict[cl[k]][t], y)
+        end
+    end
+    
+    return temp_dict
+end
 
 
 
