@@ -1,0 +1,68 @@
+Country_Data_Entries_Plot:
+  - TS_LOAD
+  - TS_PV_AVG
+  - TS_WIND_OFFSHORE_DEEP
+
+
+Country_Data_Entries:
+  - TS_LOAD
+  - TS_PV_AVG
+  #- TS_PV_INF
+  #- TS_PV_OPT
+  #- TS_PV_TRA
+  - TS_WIND_ONSHORE_AVG
+  #- TS_WIND_ONSHORE_INF
+  #- TS_WIND_ONSHORE_OPT
+  - TS_WIND_OFFSHORE_DEEP
+  #- TS_WIND_OFFSHORE_SHALLOW
+  #- TS_MOBILITY_PSNG
+  #- TS_HEAT_LOW
+  #- TS_HEAT_HIGH
+  #- TS_HP_AIRSOURCE
+  #- TS_HP_GROUNDSOURCE
+ # - TS_HYDRO_ROR
+
+
+
+
+countries:
+  #- AT
+  #- BE
+  #- BG
+ #- CH
+  #- CZ
+  - DE
+  #- DK
+  #- EE
+  #- ES
+  #- FI
+  #- FR
+  #- GR
+  #- HR
+  #- HU
+  #- IE
+  #- IT
+ # - LT 
+ # - LU
+ # - LV
+  #- NL
+ # - NO
+  #- PL
+ # - PT
+  #- RO
+  #- SE
+  #- SI
+  #- SK
+  #- TR
+ # - UK
+  #- NONEU_Balkan
+
+SCTOLERANCE: 10.0e-6
+
+
+Load:
+  - TS_MOBILITY_PSNG
+  - TS_HEAT_LOW
+  - TS_HEAT_HIGH
+  - TS_LOAD
+
