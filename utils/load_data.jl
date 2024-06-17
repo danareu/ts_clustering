@@ -48,11 +48,23 @@ function read_yaml_file(; file)
 end
 
 
-function create_clustering_matrix(;config::Dict, CountryData)
-    # create the matrix for the kmeans algorithms
+"""
+    create_clustering_matrix(; technology::Vector{String}, CountryData::Dict)
+
+Create a clustering matrix for k-means algorithms.
+
+# Arguments
+- `technology::Vector{String}`: A vector of strings representing different technologies.
+- `CountryData::Dict`: A dictionary where the keys are technology names and the values are data matrices for different countries.
+
+# Returns
+- `x::Matrix{Float64}`: A matrix, where each technology-country combination's data is reshaped and concatenated, interleaved with zero matrices.
+
+"""
+function create_clustering_matrix(;technology::Vector{String}, CountryData::Dict)
     i = 1
     x = 0
-    for cde in config["Country_Data_Entries"]
+    for cde in technology
         for n in names(CountryData[cde])
             if i == 1
                 x = reshape(CountryData[cde][:,n], (24,365))
