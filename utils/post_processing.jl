@@ -1,9 +1,15 @@
-function scaling(; data_org::Dict, scaled_clusters, k::Integer, weights::Dict, config::Dict)
+function scaling(; 
+    data_org::Dict, 
+    scaled_clusters, 
+    k::Integer, 
+    technology::Vector{String},
+    weights::Dict, 
+    config::Dict)
     # idea: weighted time-series has the same avergae as the original time-series
 
     list_diff = []
 
-    for t in keys(data_org)
+    for t in technology
         if t ∈ config["Load"]
             # normalize to max value
             for c in names(data_org[t])
@@ -120,7 +126,6 @@ function upsample_time_series(; weight::Dict, cluster_dict:: JuMP.Containers.Den
     #upsampled = JuMP.Containers.DenseAxisArray(zeros(1,1,8760), [region], [technology], 1:8760) 
 
     # average time-series if not zeros
-
     lst_tmp = []       
     if tot_sum
         # count number of zeros
@@ -137,18 +142,19 @@ function upsample_time_series(; weight::Dict, cluster_dict:: JuMP.Containers.Den
         end
     else   
         for i in 1:length(keys(weight))
+            #if technology ∈ config["Load"]
+                #tmp_sum = sum(cluster_dict[region, technology,i ,:]) * weight[i]
+                #cluster_dict[region, technology,i ,:] = (cluster_dict[region, technology,i ,:] / tmp_sum ) * (weight[i]/365)
+            #end
             append!(lst_tmp, repeat(Array(cluster_dict[region, technology,i ,:]), weight[i]))
         end
-    end
 
         if technology ∈ config["Load"]
-            sum_tmp = sum(lst_tmp)
-            lst_tmp = lst_tmp/sum_tmp
+            tmp_sum = sum(lst_tmp)
+            lst_tmp = lst_tmp/tmp_sum
         end
 
-
-    #upsampled[region, technology,:] = lst_tmp
-
+    end
     return lst_tmp
 end
 
@@ -199,7 +205,13 @@ This function calculates the variance according to 10.1016/j.energy.2011.08.021.
 """
 
 
-function calculate_variance(; cluster_dict:: JuMP.Containers.DenseAxisArray, cl:: Vector{Int64}, weight:: Dict, config:: Dict)
+function calculate_variance(; 
+    cluster_dict:: JuMP.Containers.DenseAxisArray, 
+    cl:: Vector{Int64}, 
+    weight:: Dict, 
+    config:: Dict
+    )
+
     tmp = 0.0
     counter = 0.0
     for t ∈ axes(cluster_dict)[2], r ∈ axes(cluster_dict)[1]
@@ -239,7 +251,7 @@ end
 
 
 """
-calculate_variance(data_org, cluster_dict)
+calculate_correlation(data_org, cluster_dict)
 
 This function calculates the variance according to 10.1016/j.energy.2011.08.021. 
 
@@ -254,7 +266,13 @@ This function calculates the variance according to 10.1016/j.energy.2011.08.021.
 """
 
 
-function calculate_correlation(; cluster_dict:: JuMP.Containers.DenseAxisArray, data_org:: Dict, cl:: Vector{Int64}, weight:: Dict, config:: Dict)
+function calculate_correlation(; 
+    cluster_dict:: JuMP.Containers.DenseAxisArray, 
+    data_org:: Dict, 
+    cl:: Vector{Int64}, 
+    weight:: Dict, 
+    config:: Dict)
+    
     tmp = 0.0
     counter = 0.0
     for t ∈ axes(cluster_dict)[2], r ∈ axes(cluster_dict)[1]

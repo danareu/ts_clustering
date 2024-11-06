@@ -8,13 +8,16 @@ function cluster_kmeans(;k::Integer, x::Matrix{Float64})
 end
 
 
-function convert_data(; k::Integer, config::Dict, M)
+function convert_data(; 
+    k::Integer, 
+    config::Dict, M,  
+    technology::Vector{String},)
 
     #clustered data
 
     ClusteredData = JuMP.Containers.DenseAxisArray(zeros(length(config["countries"]), length(config["Country_Data_Entries"]), k,24), config["countries"], config["Country_Data_Entries"], 1:k, 1:24) 
     for d in 1:k
-        for (m,t) in enumerate(config["Country_Data_Entries"])
+        for (m,t) in enumerate(technology)
             for (b,c) in enumerate(config["countries"])
                 a = max((m-1)*length(config["countries"])*48+(((b-1)*48)+1),1)
                 ClusteredData[c,t,d,:] = M[a:a+23,d]
@@ -31,7 +34,7 @@ end
 Calculate representative data points based on the given method.
 
 Parameters:
-- `representative::Symbol`: A symbol indicating the method to calculate representatives. Possible values are :medoid.
+- `representative::Symbol`: A symbol indicating the method to calculate representatives. Possible values are :medoid. The default is the mean .
 - `data_clustering::Matrix{Float64}`: A matrix containing the clustered data points.
 - `cl::Vector{Int64}`: A vector containing the cluster assignments for each data point.
 - `weights::Dict`: A dictionary containing weights for each cluster.
@@ -41,7 +44,12 @@ Returns:
 - `m_cluster::Matrix{Float64}`: A matrix containing the representative data points.
 
 """
-function calculate_representative(; representative::Symbol, data_clustering::Matrix{Float64}, cl::Vector{Int64}, weights::Dict, k::Integer)
+function calculate_representative(; 
+    representative::Symbol, 
+    data_clustering::Matrix{Float64}, 
+    cl::Vector{Int64}, 
+    weights::Dict, 
+    k::Integer)
 
     m_cluster = zeros(size(data_clustering)[1], k)
 
@@ -70,10 +78,17 @@ end
 
 
 
-function define_distance(; w::Integer, data_clustering::Matrix{Float64}, fast_dtw=true)
+function define_distance(; 
+    w::Integer, 
+    data_clustering::Matrix{Float64}, 
+    fast_dtw=true,
+    #kwargs...
+    )
+
     z = zeros(365,365)
     start = Dates.now()
     # iterate pairwise
+
     for i in 1:365
         for j in i+1:365  # Avoid redundant calculations (distance between i and j is the same as between j and i)
             if i == j
@@ -85,12 +100,19 @@ function define_distance(; w::Integer, data_clustering::Matrix{Float64}, fast_dt
                 else
                     if fast_dtw
                         z[i, j] = fastdtw(data_clustering[:,i],data_clustering[:,j],SqEuclidean(),w)[1]
+                        #z[i, j] = abs(cor(data_clustering[:,i],data_clustering[:,j]))
+                        #z[i, j] = fastdtw(data_clustering[:,i],data_clustering[:,j],corr_dist(),w)[1]
+                    # elseif :correlation in keys(kwargs)
+                    #     corr = cor(data_clustering[:,i],data_clustering[:,j])
+                    #     corr = (corr + corr') / 2
+                    #     fill!(diagm(corr), 1.0)
+                    #     z[i, j] =  1 - abs(corr)
                     else
                         d = DTW(radius=w)
                         z[i, j] = d(data_clustering[:,i],data_clustering[:,j])
                     end
                 end
-                z[j, i] = z[i, j]  # Symmetric matrix, so we fill both sides
+                z[j, i] = z[i, j] 
             end
         end
     end
@@ -105,6 +127,51 @@ function define_distance(; w::Integer, data_clustering::Matrix{Float64}, fast_dt
 end
 
 
+
+"""
+Calculate representative value distribution for clustered data.
+
+Args:
+    data_clustering (Matrix{Float64}): Matrix of clustered data.
+    cl (Vector{Int64}): Vector indicating cluster assignments.
+    config (Dict): Configuration dictionary containing parameters.
+    K (Integer): Number of clusters.
+
+Returns:
+ClusteredData. JuMP.Containers.DenseAxisArray
+
+The function calculates representative value distributions for each cluster (`k`) 
+according to 10.1016/j.apenergy.2022.119029
+
+"""
+
+function calculate_representative_value_distribution(;    
+    data_org::Dict, 
+    cl::Vector{Int64}, 
+    config::Dict,
+    K::Integer)
+
+    ClusteredData = JuMP.Containers.DenseAxisArray(zeros(length(config["countries"]), length(keys(data_org)), K,24), config["countries"], keys(data_org), 1:K, 1:24) 
+
+    for t ∈ keys(data_org), c ∈ config["countries"], k ∈ 1:K
+
+        m = zeros(24, count(x -> x == k, cl))
+        for (i,j) ∈ enumerate(findall(x -> x == k, cl))
+            m[:,i] = data_org[t][(j-1)*24+1:j*24, c]
+        end
+        # first load duration curve & then mean value
+        duration = sort(vec(m), rev=true)
+        dur_avg = mean.(Iterators.partition(duration, size(m)[2]))
+        # first mean of clusters and duration curve
+        m_avg = vec(mean(m, dims=2))
+        m_avg_index = sortperm(m_avg, rev=true)
+        # calculate representative 
+        z = hcat(m_avg_index, dur_avg)
+        value = z[sortperm(z[:, 1]),:][:,2]
+        ClusteredData[c,t,k,:] = value
+    end
+    return ClusteredData
+end
 
 
 

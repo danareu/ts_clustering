@@ -17,7 +17,6 @@ function read_data(;path::String, config::Dict)
             CountryData[t][:,c]  = CountryData[t][:,c] / 8760
         end
     end
-
     return CountryData
 end
 
@@ -26,7 +25,11 @@ function normalize_data(; config::Dict, CountryData::Dict)
 
     for cde ∈ config["Country_Data_Entries"]
         for col in names(CountryData[cde])
-            CountryData[cde][!, col] .= zscore_column!(CountryData[cde][!, col])
+            try
+                CountryData[cde][!, col] .= zscore_column!(CountryData[cde][!, col])
+            catch
+                println(col, cde)
+            end
         end
     end
     return CountryData
@@ -76,8 +79,12 @@ function create_clustering_matrix(;technology::Vector{String}, CountryData::Dict
             i += 1
         end
     end
-    x = convert(Matrix{Float64}, x)
-    x[isnan.(x)] .= 0.0
+    try
+        x = convert(Matrix{Float64}, x)
+        x[isnan.(x)] .= 0.0
+    catch
+        println(technology)
+    end
     return x
 end
 

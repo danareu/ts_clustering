@@ -19,6 +19,7 @@ module TSClustering
     using PlotlyJS
     using DelimitedFiles
     using DynamicAxisWarping
+    using SavitzkyGolay
 
 
     const DIR = dirname(@__DIR__)

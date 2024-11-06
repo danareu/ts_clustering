@@ -1,17 +1,18 @@
 ## plot the results
 
 
-function plot_cluster_centers(;K::Integer, config::Dict, FullData, CountryData, country, a, weights)
+function plot_cluster_centers(;K::Integer, config::Dict, FullData, CountryData, country, a, weights, hoffmann)
 
     p = make_subplots(rows=length(collect(keys(CountryData))), 
     cols=K, 
-    vertical_spacing=0.02, 
-    column_titles=["Day$(i)_w_$(round(weights[i]/365,digits=2))" for i in 1:K], row_titles=[split(i, "TS_")[end] for i in collect(keys(CountryData))])
+    vertical_spacing=0.04, 
+
+    column_titles=["Day $(i)" for i in 1:K], row_titles=[split(i, "TS_")[end] for i in collect(keys(CountryData))])
 
     # real da
     for (i,t) in enumerate(collect(keys(CountryData)))
         for (k,m) in enumerate(0:24:8735)
-            if t ∈ ["TS_LOAD", "TS_HEAT_LOW", "TS_HEAT_HIGH"]
+            if t ∈ ["TS_LOAD", "TS_HEAT_LOW", "TS_HEAT_HIGH", "TS_MOBILITY_PSNG"]
                 y=CountryData[t][m+1:m+24,country]/sum(CountryData[t][m+1:m+24,country])
             else
                 y=CountryData[t][m+1:m+24,country]
@@ -33,26 +34,43 @@ function plot_cluster_centers(;K::Integer, config::Dict, FullData, CountryData, 
     # clustered data
     for d in 1:K
         for (i,t) in enumerate(collect(keys(CountryData)))
-            if t ∈ ["TS_LOAD", "TS_HEAT_LOW", "TS_HEAT_HIGH"]
+            show_legend = (i == 1 ) && (d == 1)
+            if t ∈ ["TS_LOAD", "TS_HEAT_LOW", "TS_HEAT_HIGH", "TS_MOBILITY_PSNG"]
                 y=FullData[country,t,d,:]/sum(FullData[country,t,d,:])
+                c = hoffmann[country,t,d,:]/sum(hoffmann[country,t,d,:]) 
             else
                 y=FullData[country,t,d,:]
+                c=hoffmann[country,t,d,:]
             end
 
             add_trace!(p, 
             scatter(y=y, 
             marker=attr(
-                color="red"
+                color="#bc203e"
             ),
-            showlegend=false,
+            name="medoid",
+            showlegend=show_legend,
+            ), 
+            row=i, 
+            col=d)
+
+            add_trace!(p, 
+            scatter(y=c, 
+            marker=attr(
+                color="blue"
+            ),
+            name="hoffmann",
+            showlegend=show_legend,
             ), 
             row=i, 
             col=d)
         end
     end
 
+
     relayout!(p)
-    #format_layout(p=p, max_value=0)
+    p.plot.layout.height = 200*length(collect(keys(CountryData)))  
+    p.plot.layout.width = 200 * K
     return p
 end
 
@@ -232,10 +250,10 @@ function plot_duration_curve(;
     write_html::Bool=true,
     kwargs...)
 
-    p = make_subplots(rows=1, 
+    p = make_subplots(rows=length(axes(list_data)[2]), 
     cols=length(technology), 
     vertical_spacing=0.02,
-    specs=[Spec() Spec() Spec() Spec()],
+    #specs=[Spec() Spec() Spec() Spec()],
     subplot_titles=["TS_LOAD" "TS_WIND_ONSHORE_AVG" "TS_WIND_OFFSHORE" "TS_PV_AVG"]
     
     )
@@ -245,21 +263,25 @@ function plot_duration_curve(;
 
     #color_dict = Dict("Original_Data"=> "grey", "Euclidean" => "rgb(181,48,57)", "DTW (5)" => "rgb(247,144,111)", "DTW (10)" => "rgb(1,151,239)", "DTW (1)" => "rgb(212,144,202)")
 
-    for (j,s) ∈ enumerate(axes(list_data)[1])
-        for (i,t) ∈ enumerate(technology)
-            add_trace!(p,
-            scatter(x=1:8760,
-            y=list_data[s,t,:],
-            line=attr(
-                    color=color_dict[s]),
-            name=s,
-            legendgroup=t),
-            row=1, 
-            col=i) 
+    for (g,r) ∈ enumerate(axes(list_data)[2])
+        for (j,s) ∈ enumerate(axes(list_data)[1])
+            for (i,t) ∈ enumerate(technology)
+                add_trace!(p,
+                scatter(x=1:8760,
+                y=list_data[s,r,t,:],
+                line=attr(
+                        color=color_dict[s]),
+                name="$(r)_$(s)",
+                showlegend=(i == 1),
+                legendgroup=s),
+                row=g, 
+                col=i) 
+            end
         end
     end
 
     # plot genesys timeseries 
+    # probably wont workk because of region row is missing
     if :genesys in keys(kwargs)
         ts_gerb = Dict(kwargs)[:genesys]
         for (i,t) ∈ enumerate(technology)
@@ -279,6 +301,8 @@ function plot_duration_curve(;
         format_layout(p=p, max_value=0)
         savefig(p, "LoadDuration_$(Dates.now()).html")
     end
+    p.plot.layout.height = 200*length(axes(list_data)[2])  # Set the width of the plot (in pixels)
+
     return p
 end
 
@@ -343,36 +367,57 @@ end
 
 
 function format_layout(; p, max_value)
-    return relayout!(p,
-    paper_bgcolor="rgb(0,35,74)",
-    legend_traceorder="normal",
-    font_family="Calibri",
-    font=attr(size=32, color="white"),
-    font_color="white", 
-    plot_bgcolor="white", 
-    borderwidth=1,     
-    xaxis=attr(
-        showline=true,
-        showgrid=false,
-        tickfont=attr(color="white"),
-        mirror=true,
-        showticklabels=true,
-        linecolor="white",
-        font=attr(size=32, color="white"),
-        linewidth=2
-        ),
-    yaxis=attr(
+    return relayout!(
+        p,
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        margin=attr(l=10, r=10, t=10, b=10),  # Adjust the margins for spacing
+        font_family="Calibri",
+        font=attr(size=25, color="white"),
+        legend_traceorder="normal",
+        font_color="white",
+        
+        xaxis=attr(
             showline=true,
-            mirror=true,
-            tickfont=attr(color="white"),
+            mirror="allticks",  # Mirrors the axis lines across all subplots
             showgrid=false,
-            #range=[0, 0.032], 
-            font=attr(size=32, color="white"),
-            showticklabels=true,
-            linecolor="white",
-            linewidth=2
-            ),   
-        )
+            tickfont=attr(color="white"),
+            linecolor="black",  # Border color
+            linewidth=2,  # Border thickness
+        ),
+        
+        yaxis=attr(
+            showline=true,
+            mirror="allticks",  # Mirrors the axis lines across all subplots
+            showgrid=false,
+            tickfont=attr(color="white"),
+            linecolor="black",  # Border color
+            linewidth=2,  # Border thickness
+        ),
+        
+        # Apply to all subplots
+        xaxis2=attr(
+            showline=true,
+            mirror="allticks",  
+            showgrid=false,
+            tickfont=attr(color="white"),
+            linecolor="black",  
+            linewidth=2,
+        ),
+        
+        yaxis2=attr(
+            showline=true,
+            mirror="allticks",  
+            showgrid=false,
+            tickfont=attr(color="white"),
+            linecolor="black",  
+            linewidth=2,
+        ),
+        
+        # Add additional x/y axes as needed for more subplots
+    )
+    
+    
 end
 
 
@@ -441,3 +486,67 @@ function create_palette(; list_data)
 end
 
 
+
+
+function plot_cluster_centers_converence(;K::Integer, config::Dict, FullData, CountryData, country, a, weights)
+
+    p = make_subplots(rows=1, 
+    cols=4, 
+    vertical_spacing=0.02, 
+    column_titles=["Wind Offshore", "Wind Onshore", "Load", "PV"]
+    )
+
+    # real da
+    for (i,t) in enumerate(collect(keys(CountryData)))
+        for (k,m) in enumerate(0:24:8735)
+            if t ∈ ["TS_LOAD", "TS_HEAT_LOW", "TS_HEAT_HIGH"]
+                y=CountryData[t][m+1:m+24,country]/sum(CountryData[t][m+1:m+24,country])
+            else
+                y=CountryData[t][m+1:m+24,country]
+            end
+            if a[k+1] == 3
+                add_trace!(p, 
+                scatter(y=y, 
+                marker=attr(
+                    color="grey"
+                ),
+                showlegend=false,
+                ), 
+                row=1, 
+                col=i)
+            end
+        end
+    end
+
+
+    # clustered data
+    for d in [3]
+        for (i,t) in enumerate(collect(keys(CountryData)))
+            if t ∈ ["TS_LOAD", "TS_HEAT_LOW", "TS_HEAT_HIGH"]
+                y=FullData[country,t,d,:]/sum(FullData[country,t,d,:])
+            else
+                y=FullData[country,t,d,:]
+            end
+
+            add_trace!(p, 
+            scatter(y=y, 
+            marker=attr(
+                color="#bc203e"
+            ),
+            name="medoid",
+            showlegend=false,
+            ), 
+            row=1, 
+            col=i)
+
+
+        end
+    end
+
+    update_xaxes!(p, range=[0,24], tickvals=[0,12,24])
+
+
+    relayout!(p)
+    format_layout(p=p, max_value=0)
+    return p
+end
