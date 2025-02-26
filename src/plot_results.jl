@@ -326,31 +326,41 @@ function plot_rmse_clusters(; df:: DataFrame, write_html=false, name:: String)
 
     traces = GenericTrace[]
 
-    W = unique(df.Window)
+    if "Window" ∈ names(df)
 
-    palette = ["rgb(1,151,239)", "rgb(247,144,111)", "rgb(82,169,105)", "rgb(212,144,202)", "rgb(231,202,145)", "rgb(252,184,32)"]
+        W = unique(df.Window)
 
-    if length(unique(df.Window)) <= length(palette)
-        color_dict = Dict((key == 0 ? key => "rgb(181,48,57)" : key => palette[i]) for (i, key) in enumerate(W))
+        palette = ["rgb(1,151,239)", "rgb(247,144,111)", "rgb(82,169,105)", "rgb(212,144,202)", "rgb(231,202,145)", "rgb(252,184,32)"]
+
+        if length(unique(df.Window)) <= length(palette)
+            color_dict = Dict((key == 0 ? key => "rgb(181,48,57)" : key => palette[i]) for (i, key) in enumerate(W))
+        else
+            color_dict = Dict((key == 0 ? key => "rgb(181,48,57)" : key => ColorSchemes.tab20.colors[i]) for (i, key) in enumerate(W))
+        end
+
+        for w in W
+            n = w == 999 ? "Original" : (w == 0 ? "Euclidean" : "DTW ($w)")
+            l = w == 4 ? write_html : 2
+            dash_value = (w == 0) ? "dash" : "solid"
+            push!(traces, scatter(
+                x=filter(row -> row.Window == w, df)[:, :Cluster], 
+                y=filter(row -> row.Window == w, df)[:, :Value], 
+                mode="lines", 
+                name=w,
+                line=attr(width=l,
+                    color=color_dict[w],
+                    dash=dash_value),
+            ))
+        end
     else
-        color_dict = Dict((key == 0 ? key => "rgb(181,48,57)" : key => ColorSchemes.tab20.colors[i]) for (i, key) in enumerate(W))
-    end
-
-
-    for w in W
-        n = w == 999 ? "Original" : (w == 0 ? "Euclidean" : "DTW ($w)")
-        l = w == 4 ? write_html : 2
-        dash_value = (w == 0) ? "dash" : "solid"
         push!(traces, scatter(
-            x=filter(row -> row.Window == w, df)[:, :Cluster], 
-            y=filter(row -> row.Window == w, df)[:, :Value], 
-            mode="lines", 
-            name=w,
-            line=attr(width=l,
-                color=color_dict[w],
-                dash=dash_value),
-        ))
+                x=df[:, :TimeSlice]/24, 
+                y=df[:, :Value], 
+                mode="lines", 
+                line=attr(
+                    color="rgb(1,151,239)")))
     end
+
 
     scatter_plot = plot(traces)
     relayout!(scatter_plot,
@@ -359,7 +369,7 @@ function plot_rmse_clusters(; df:: DataFrame, write_html=false, name:: String)
 
     # Show the scatter plot
     if write_html
-        format_layout(p=scatter_plot, max_value=maximum(df[!, :Value]))
+        #format_layout(p=scatter_plot, max_value=maximum(df[!, :Value]))
         savefig(scatter_plot, name)
     end
     return scatter_plot
@@ -544,6 +554,7 @@ function plot_cluster_centers_converence(;K::Integer, config::Dict, FullData, Co
     end
 
     update_xaxes!(p, range=[0,24], tickvals=[0,12,24])
+    update_yaxes!(p, range=[0,1], tickvals=[0,1])
 
 
     relayout!(p)

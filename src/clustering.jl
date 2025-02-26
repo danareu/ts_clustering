@@ -62,13 +62,10 @@ function calculate_representative(;
     end
 
     if representative == :medoid
-        df = DataFrame(Day=1:365, Cluster=cl, Distance=[euclidean(m_cluster[:,i], data_clustering[:,j]) for (j,i) in enumerate(cl)])
-        #d = DTW(radius=5)
-        #df = DataFrame(Day=1:365, Cluster=cl, Distance=[d(m_cluster[:,i], data_clustering[:,j]) for (j,i) in enumerate(cl)])
-
+        df = DataFrame(Day=1:365, Cluster=cl, Distance=[sqeuclidean(m_cluster[:,i], data_clustering[:,j]) for (j,i) in enumerate(cl)])
         for i in 1:k
             filtered_df = filter(row -> row[:Cluster] == i, df)
-            # Sort values by column A in descending order
+            #Sort values by column A in descending order
             min_day = sort(filtered_df, :Distance, rev=false)[1,:Day]
             m_cluster[:,i] = data_clustering[:,min_day]
         end
@@ -184,3 +181,41 @@ function denormalized_data!(col)
     std = std(col)
     return (col .* std) .+ mean
 end
+
+
+
+function calculate_medoid(; 
+    data_org::Dict,
+    cl::Vector{Int64}, 
+    config,
+    K::Integer,
+    technology::Vector{String})
+
+    ClusteredData = JuMP.Containers.DenseAxisArray(zeros(length(config["countries"]), length(technology), K,24), config["countries"], technology, 1:K, 1:24) 
+
+    ## alternative: calculate medoid for each feature
+
+    for t ∈ technology, c ∈ config["countries"], k ∈ 1:K
+        # Indices for the current cluster
+        indices = findall(x -> x == k, cl)
+        num_points = length(indices)
+        m = zeros(24, num_points)
+
+        for (i, idx) ∈ enumerate(indices)
+            m[:, i] = data_org[t][(idx - 1) * 24 + 1 : idx * 24, c]
+        end
+
+        # Mean vector of the cluster
+        m_avg = vec(mean(m, dims=2))
+
+        # Compute squared Euclidean distances
+        distances = [sqeuclidean(m[:, i], m_avg) for i in 1:num_points]
+
+        # Find the medoid
+        min_day_idx = argmin(distances)
+        ClusteredData[c, t, k, :] = m[:, min_day_idx]
+    end 
+    return ClusteredData
+end
+
+

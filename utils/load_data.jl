@@ -23,7 +23,7 @@ end
 
 function normalize_data(; config::Dict, CountryData::Dict)
 
-    for cde ∈ config["Country_Data_Entries"]
+    for cde ∈ keys(CountryData)
         for col in names(CountryData[cde])
             try
                 CountryData[cde][!, col] .= zscore_column!(CountryData[cde][!, col])
