@@ -156,6 +156,22 @@ function calculate_representative_value_distribution(;
         for (i,j) ∈ enumerate(findall(x -> x == k, cl))
             m[:,i] = data_org[t][(j-1)*24+1:j*24, c]
         end
+
+        # remove extremes
+        # Compute column sums
+        # col_sums = vec(sum(m, dims=1))  # Convert to 1D array
+
+        # # Compute mean and standard deviation
+        # mean_sum = mean(col_sums)
+        # std_sum = std(col_sums)
+
+        # # Identify outlier columns (more than ±3 standard deviations)
+        # outlier_indices = findall(x -> abs(x - mean_sum) > 3 * std_sum, col_sums)
+
+        # # Keep only non-outlier columns
+        # valid_indices = setdiff(1:size(m,2), outlier_indices)
+        # m = m[:, valid_indices]
+
         # first load duration curve & then mean value
         duration = sort(vec(m), rev=true)
         dur_avg = mean.(Iterators.partition(duration, size(m)[2]))
