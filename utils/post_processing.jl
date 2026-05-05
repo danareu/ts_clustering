@@ -121,7 +121,7 @@ end
 
 
 
-function upsample_time_series(; weight::Dict, cluster_dict:: JuMP.Containers.DenseAxisArray, technology:: String, region:: String, tot_sum=false, config::Dict)
+function upsample_time_series(; weight::Dict, cluster_dict:: JuMP.Containers.DenseAxisArray, technology:: String, region, tot_sum=false, config::Dict)
     # create new density array
     #upsampled = JuMP.Containers.DenseAxisArray(zeros(1,1,8760), [region], [technology], 1:8760) 
 
