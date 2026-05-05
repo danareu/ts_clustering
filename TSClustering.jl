@@ -11,6 +11,7 @@ module TSClustering
     using DataFrames
     using Statistics
     using DataFrames
+    using MultivariateStats
     using Clustering
     using Distances
     using JuMP
