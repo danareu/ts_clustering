@@ -105,7 +105,7 @@ function define_distance(;
                     #     fill!(diagm(corr), 1.0)
                     #     z[i, j] =  1 - abs(corr)
                     else
-                        d = DTW(radius=w)
+                        d = DTW(radius=w, normalizer=ZNormalizer)
                         z[i, j] = d(data_clustering[:,i],data_clustering[:,j])
                     end
                 end
