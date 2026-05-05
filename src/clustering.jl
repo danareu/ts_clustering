@@ -218,4 +218,66 @@ function calculate_medoid(;
     return ClusteredData
 end
 
+function calculate_centroid(; 
+    data_org::Dict,
+    cl::Vector{Int64}, 
+    config,
+    K::Integer,
+    technology::Vector{String})
 
+    ClusteredData = JuMP.Containers.DenseAxisArray(zeros(length(config["countries"]), length(technology), K,24), config["countries"], technology, 1:K, 1:24) 
+
+    ## alternative: calculate medoid for each feature
+
+    for t ∈ technology, c ∈ config["countries"], k ∈ 1:K
+        # Indices for the current cluster
+        indices = findall(x -> x == k, cl)
+        num_points = length(indices)
+        m = zeros(24, num_points)
+
+        for (i, idx) ∈ enumerate(indices)
+            m[:, i] = data_org[t][(idx - 1) * 24 + 1 : idx * 24, c]
+        end
+        ClusteredData[c, t, k, :] = vec(mean(m, dims=2))
+    end 
+    return ClusteredData
+end
+
+
+
+
+function derive_principal_components(; 
+    config::Dict, 
+    CountryData::Dict,
+    technology::Vector{String}
+    )
+
+    df_list = DataFrame[]
+    
+    # Loop over each sheet name
+    for (t,X) ∈ CountryData
+        rename!(X, Dict(col => "$(col)_$(t)" for col ∈ names(X)))
+        push!(df_list, X)
+    end
+    
+    # Concatenate all DataFrames horizontally
+    X_raw = hcat(df_list...)
+  
+    m = Matrix(X_raw)
+    x_norm, μ, σ = scaling(m)
+    X = x_norm'
+  
+    model = fit(PCA, X; maxoutdim=size(X, 2), method=:auto)
+  
+    # Step 2: Get explained variance ratio
+    explained_var = principalvars(model)
+    explained_ratio = explained_var ./ sum(explained_var)
+    cumulative_var = cumsum(explained_ratio)
+  
+    # Step 3: Find minimum number of components for >= 80% variance
+    k = findfirst(x -> x ≥ 0.8, cumulative_var)
+  
+    # transpose the data back again 
+    return Matrix(MultivariateStats.transform(model, X))'[!,1:k]
+  
+  end
