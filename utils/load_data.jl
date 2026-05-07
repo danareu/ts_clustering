@@ -1,5 +1,14 @@
-##### LOAD THE DATA
+"""
+    read_data(; path, config) -> Dict
 
+Read hourly time-series profiles from an XLSX file into a `Dict` keyed by
+technology. Load-type profiles are divided by 8,760 to express them as a
+share of annual total.
+
+# Arguments
+- `path::String`: Path to the input XLSX file.
+- `config::Dict`: Must contain `"Country_Data_Entries"`, `"countries"`, and `"Load"`.
+"""
 
 function read_data(;path::String, config::Dict)
 # returns dictionary with technology time series
@@ -21,6 +30,16 @@ function read_data(;path::String, config::Dict)
 end
 
 
+"""
+    normalize_data(; config, CountryData) -> Dict
+
+Apply z-score normalisation column-wise to all profiles in `CountryData`
+in-place. Columns that fail (e.g. zero variance) are skipped with a warning.
+
+# Arguments
+- `config::Dict`: Configuration dictionary.
+- `CountryData::Dict`: Hourly data keyed by technology, modified in-place.
+"""
 function normalize_data(; config::Dict, CountryData::Dict)
 
     for cde ∈ keys(CountryData)
@@ -36,6 +55,12 @@ function normalize_data(; config::Dict, CountryData::Dict)
 end
 
 
+
+"""
+    zscore_column!(col) -> Vector
+
+Standardise `col` to zero mean and unit variance: `(col .- μ) ./ σ`.
+"""
 function zscore_column!(col)
     # normalize the data
     mean_col = mean(col)

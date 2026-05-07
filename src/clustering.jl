@@ -1,3 +1,12 @@
+"""
+    cluster_kmeans(; k, x) -> ClusterResults
+
+Cluster the columns of `x` into `k` groups using K-Means.
+
+# Arguments
+- `k::Integer`: Number of clusters.
+- `x::Matrix{Float64}`: Data matrix `(n_features × n_observations)`.
+"""
 function cluster_kmeans(;k::Integer, x::Matrix{Float64})
     k = k
     R = kmeans(x, k)
@@ -8,6 +17,18 @@ function cluster_kmeans(;k::Integer, x::Matrix{Float64})
 end
 
 
+"""
+    convert_data(; k, config, M, technology) -> DenseAxisArray
+
+Reshape K-Means cluster centres `M` into a 4D array indexed by
+`[country, technology, cluster, hour]`.
+
+# Arguments
+- `k::Integer`: Number of clusters.
+- `config::Dict`: Must contain `"countries"` and `"Country_Data_Entries"`.
+- `M`: Centre matrix `(n_features × k)` from `cluster_kmeans`.
+- `technology::Vector{String}`: Technologies to extract, in construction order.
+"""
 function convert_data(; 
     k::Integer, 
     config::Dict, M,  
@@ -74,7 +95,20 @@ function calculate_representative(;
 end
 
 
+"""
+    define_distance(; w, data_clustering, fast_dtw) -> Matrix{Float64}
 
+Compute the 365×365 pairwise distance matrix over daily profiles.
+
+- `w = 0`: squared Euclidean distance.
+- `w > 0, fast_dtw = true`: FastDTW with a warping window of `w`.
+- `w > 0, fast_dtw = false`: exact DTW with z-normalisation and radius `w`.
+
+# Arguments
+- `w::Integer`: Warping window size (`0` for Euclidean).
+- `data_clustering::Matrix{Float64}`: Feature matrix `(n_features × 365)`.
+- `fast_dtw`: Use FastDTW approximation (default: `true`).
+"""
 function define_distance(; 
     w::Integer, 
     data_clustering::Matrix{Float64}, 
@@ -97,13 +131,6 @@ function define_distance(;
                 else
                     if fast_dtw
                         z[i, j] = fastdtw(data_clustering[:,i],data_clustering[:,j],SqEuclidean(),w)[1]
-                        #z[i, j] = abs(cor(data_clustering[:,i],data_clustering[:,j]))
-                        #z[i, j] = fastdtw(data_clustering[:,i],data_clustering[:,j],corr_dist(),w)[1]
-                    # elseif :correlation in keys(kwargs)
-                    #     corr = cor(data_clustering[:,i],data_clustering[:,j])
-                    #     corr = (corr + corr') / 2
-                    #     fill!(diagm(corr), 1.0)
-                    #     z[i, j] =  1 - abs(corr)
                     else
                         d = DTW(radius=w, normalizer=ZNormalizer)
                         z[i, j] = d(data_clustering[:,i],data_clustering[:,j])
@@ -115,11 +142,6 @@ function define_distance(;
     end
     ends = Dates.now()
     
-    # compute and storage of runtime
-    string = [Dict("Time"=>ends-start, "Size"=>size(data_clustering)[1]*size(data_clustering)[2], "warping path"=> w, "Method"=> fast_dtw)]
-    open("/cluster/home/danare/git/Clustering/data/computation_time.txt", "a") do io
-        writedlm(io, string)
-        end
     return z
 end
 
@@ -157,21 +179,6 @@ function calculate_representative_value_distribution(;
             m[:,i] = data_org[t][(j-1)*24+1:j*24, c]
         end
 
-        # remove extremes
-        # Compute column sums
-        # col_sums = vec(sum(m, dims=1))  # Convert to 1D array
-
-        # # Compute mean and standard deviation
-        # mean_sum = mean(col_sums)
-        # std_sum = std(col_sums)
-
-        # # Identify outlier columns (more than ±3 standard deviations)
-        # outlier_indices = findall(x -> abs(x - mean_sum) > 3 * std_sum, col_sums)
-
-        # # Keep only non-outlier columns
-        # valid_indices = setdiff(1:size(m,2), outlier_indices)
-        # m = m[:, valid_indices]
-
         # first load duration curve & then mean value
         duration = sort(vec(m), rev=true)
         dur_avg = mean.(Iterators.partition(duration, size(m)[2]))
@@ -187,10 +194,11 @@ function calculate_representative_value_distribution(;
 end
 
 
+"""
+    denormalized_data!(col)
 
-
-
-
+Reverse a z-score normalisation: returns `col .* std(col) .+ mean(col)`.
+"""
 function denormalized_data!(col)
     # normalize the data
     mean = mean(col)
@@ -199,7 +207,20 @@ function denormalized_data!(col)
 end
 
 
+"""
+    calculate_medoid(; data_org, cl, config, K, technology) -> DenseAxisArray
 
+For each `(country, technology, cluster)` triple, find the day whose 24-hour
+profile is closest (squared Euclidean) to the cluster mean and store it as the
+representative profile.
+
+# Arguments
+- `data_org::Dict`: Raw hourly data, keyed by technology.
+- `cl::Vector{Int64}`: Cluster assignment for each of the 365 days.
+- `config`: Must contain `"countries"`.
+- `K::Integer`: Number of clusters.
+- `technology::Vector{String}`: Technologies to process.
+"""
 function calculate_medoid(; 
     data_org::Dict,
     cl::Vector{Int64}, 
@@ -234,6 +255,21 @@ function calculate_medoid(;
     return ClusteredData
 end
 
+
+
+"""
+    calculate_centroid(; data_org, cl, config, K, technology) -> DenseAxisArray
+
+For each `(country, technology, cluster)` triple, store the mean of all
+assigned days' 24-hour profiles as the representative profile.
+
+# Arguments
+- `data_org::Dict`: Raw hourly data, keyed by technology.
+- `cl::Vector{Int64}`: Cluster assignment for each of the 365 days.
+- `config`: Must contain `"countries"`.
+- `K::Integer`: Number of clusters.
+- `technology::Vector{String}`: Technologies to process.
+"""
 function calculate_centroid(; 
     data_org::Dict,
     cl::Vector{Int64}, 
@@ -261,7 +297,19 @@ end
 
 
 
+"""
+    derive_principal_components(; config, CountryData, technology) -> Matrix
 
+Reduce `CountryData` to the minimum number of principal components that
+explain at least 80% of total variance. Columns are z-normalised before PCA.
+
+# Arguments
+- `config::Dict`: Configuration dictionary.
+- `CountryData::Dict`: Hourly data keyed by technology.
+- `technology::Vector{String}`: Technologies to include.
+
+Returns an `(n_days × k)` matrix of PC scores.
+"""
 function derive_principal_components(; 
     config::Dict, 
     CountryData::Dict,

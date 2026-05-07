@@ -1,3 +1,23 @@
+"""
+    scaling(; data_org, scaled_clusters, k, technology, weights, config) -> DenseAxisArray
+
+Scale representative cluster profiles so that their weighted mean matches the
+original annual mean for each `(country, technology)` pair.
+
+For load-type technologies the profiles are normalised by their total sum.
+For all others, a scaling factor `σ` is applied iteratively: values are first
+scaled to preserve the annual sum, capped at 1, then rescaled again on the
+remaining sub-unity values to recover the lost energy. A warning is printed
+when the residual deviation exceeds `config["SCTOLERANCE"]`.
+
+# Arguments
+- `data_org::Dict`: Original hourly data keyed by technology.
+- `scaled_clusters`: Representative profiles `[country, technology, cluster, hour]`, modified in-place.
+- `k::Integer`: Number of clusters.
+- `technology::Vector{String}`: Technologies to scale.
+- `weights::Dict`: Number of days assigned to each cluster.
+- `config::Dict`: Must contain `"Load"` and `"SCTOLERANCE"`.
+"""
 function scaling(; 
     data_org::Dict, 
     scaled_clusters, 
@@ -55,8 +75,6 @@ function scaling(;
                     end
                 end  
 
-                #scaled_clusters[c,t,:,:] = scaled_clusters[c,t,:,:]  * (max_org- min_org) .+ min_org
-
                 # check tolerance level
                 mean_cl=0
                 for d in 1:k
@@ -66,15 +84,9 @@ function scaling(;
                     println("Deviation abs.: $(abs(mean_cl - mean(data_org[t][:,c]))) for $c and $t")
                 end
                 push!(list_diff, abs(mean_cl/8760-sum(data_org[t][:,c])/8760))
-
-                #println("The difference is $(abs(mean_cl/8760-sum(data_org[t][:,c])/8760))")
             end
         end
     end
-    
-    #p = plot(1:length(list_diff),list_diff)
-    #savefig(p, "diff_mean_val.png")
-
     return scaled_clusters
 end
 
@@ -111,8 +123,6 @@ function calculate_variance_per_cluster(; CountryData:: Dict, k::Integer, countr
         for t in collect(keys(CountryData))
             y = var(CountryData[t][m+1:m+24, country])
             push!(temp_dict[cl[k]][t], y)
-            #y = CountryData[t][m+1:m+24, country]
-            #append!(temp_dict[cl[k]][t], y)
         end
     end
     
@@ -122,9 +132,6 @@ end
 
 
 function upsample_time_series(; weight::Dict, cluster_dict:: JuMP.Containers.DenseAxisArray, technology:: String, region, tot_sum=false, config::Dict)
-    # create new density array
-    #upsampled = JuMP.Containers.DenseAxisArray(zeros(1,1,8760), [region], [technology], 1:8760) 
-
     # average time-series if not zeros
     lst_tmp = []       
     if tot_sum
@@ -142,10 +149,6 @@ function upsample_time_series(; weight::Dict, cluster_dict:: JuMP.Containers.Den
         end
     else   
         for i in 1:length(keys(weight))
-            #if technology ∈ config["Load"]
-                #tmp_sum = sum(cluster_dict[region, technology,i ,:]) * weight[i]
-                #cluster_dict[region, technology,i ,:] = (cluster_dict[region, technology,i ,:] / tmp_sum ) * (weight[i]/365)
-            #end
             append!(lst_tmp, repeat(Array(cluster_dict[region, technology,i ,:]), weight[i]))
         end
 

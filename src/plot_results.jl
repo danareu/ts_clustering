@@ -1,6 +1,19 @@
-## plot the results
+"""
+    plot_cluster_centers(; K, config, FullData, CountryData, country, a, weights, hoffmann)
 
+Plot all 365 original daily profiles (grey) overlaid with the medoid (red)
+and Hoffmann (blue) representatives for each cluster and technology.
 
+# Arguments
+- `K::Integer`: Number of clusters.
+- `config::Dict`: Configuration dictionary.
+- `FullData`: Medoid profiles `[country, technology, cluster, hour]`.
+- `CountryData`: Raw hourly data keyed by technology.
+- `country`: Country identifier to plot.
+- `a`: Cluster assignments (365-length vector).
+- `weights`: Number of days per cluster.
+- `hoffmann`: Hoffmann representative profiles, same axes as `FullData`.
+"""
 function plot_cluster_centers(;K::Integer, config::Dict, FullData, CountryData, country, a, weights, hoffmann)
 
     p = make_subplots(rows=length(collect(keys(CountryData))), 
@@ -75,6 +88,16 @@ function plot_cluster_centers(;K::Integer, config::Dict, FullData, CountryData, 
 end
 
 
+
+"""
+    plot_variance_cluster(; K, var_temp)
+
+Box plot of within-cluster variance per technology, with one row per cluster.
+
+# Arguments
+- `K::Integer`: Number of clusters (rows in the subplot grid).
+- `var_temp::Dict`: Nested dict `var_temp[cluster][technology] => values`.
+"""
 function plot_variance_cluster(;K::Integer, var_temp::Dict,)
 
     p = make_subplots(rows=K, 
@@ -110,8 +133,15 @@ end
 
 
 
+"""
+    plot_heatmaps(; full_data, clustered_data)
 
+Side-by-side heatmaps of the original (365×24) and clustered profiles.
 
+# Arguments
+- `full_data`: Original hourly data reshaped to `(8760,)`.
+- `clustered_data`: Clustered hourly data reshaped to `(8760,)`.
+"""
 function plot_heatmaps(; full_data, clustered_data)
     p = make_subplots(rows=1, 
     cols=2, 
@@ -134,7 +164,18 @@ end
 
 
 
+"""
+    map_to_org(; list_df, list_window, write_html, name)
 
+Scatter plot mapping each day to its representative day, comparing multiple
+distance methods side by side.
+
+# Arguments
+- `list_df`: Vector of assignment vectors (one per method).
+- `list_window`: Warping window for each method (`0` = Euclidean, `999` = original).
+- `write_html`: Save the plot to an HTML file (default: `false`).
+- `name`: Output filename when `write_html = true` (default: `"Chronology"`).
+"""
 function map_to_org(; list_df, list_window, write_html=false, name="Chronology")
     traces = GenericTrace[]
 
@@ -168,8 +209,15 @@ function map_to_org(; list_df, list_window, write_html=false, name="Chronology")
 end
 
 
+"""
+    plot_dtw_heatmaps(; matrix, x, y)
 
+Heatmap of a DTW cost matrix with the optimal warping path overlaid.
 
+# Arguments
+- `matrix`: DTW cost matrix.
+- `x`, `y`: Coordinates of the optimal warping path.
+"""
 function plot_dtw_heatmaps(; matrix, x,y)
     p = make_subplots(rows=1, 
     cols=1, 
@@ -196,13 +244,28 @@ function plot_dtw_heatmaps(; matrix, x,y)
 end
 
 
+
+"""
+    plot_basic_heatmap(; matrix)
+
+Simple heatmap of `matrix`.
+"""
+
 function plot_basic_heatmap(; matrix)
 
     return plot(heatmap(z=matrix))
 
 end
 
+"""
+    plot_time_series_dtw(; ts1, ts2)
 
+Overlay two time series (blue and red) for visual DTW alignment inspection.
+
+# Arguments
+- `ts1`: First time series (blue).
+- `ts2`: Second time series (red).
+"""
 function plot_time_series_dtw(; ts1, ts2)
     p = make_subplots(rows=1, 
     cols=1, 
@@ -376,6 +439,19 @@ function plot_rmse_clusters(; df:: DataFrame, write_html=false, name:: String)
 end
 
 
+
+"""
+    format_layout(; p, max_value)
+
+Apply a consistent white-background style to a PlotlyJS figure in-place.
+
+Sets a white paper/plot background, Calibri font, no gridlines, and mirrored
+black axis borders across all subplots.
+
+# Arguments
+- `p`: PlotlyJS figure to modify.
+- `max_value`: Reserved for future axis range clamping (unused).
+"""
 function format_layout(; p, max_value)
     return relayout!(
         p,
@@ -496,8 +572,23 @@ function create_palette(; list_data)
 end
 
 
+"""
+    plot_cluster_centers_converence(; K, config, FullData, CountryData, country, a, weights)
 
+Plot original days belonging to cluster 3 (grey) overlaid with their medoid
+(red) for four technologies: Wind Offshore, Wind Onshore, Load, and PV.
 
+Load-type profiles are normalised by their daily sum before plotting.
+
+# Arguments
+- `K::Integer`: Total number of clusters.
+- `config::Dict`: Configuration dictionary.
+- `FullData`: Medoid profiles `[country, technology, cluster, hour]`.
+- `CountryData`: Raw hourly data keyed by technology.
+- `country`: Country identifier to plot.
+- `a`: Cluster assignments (365-length vector).
+- `weights`: Number of days per cluster.
+"""
 function plot_cluster_centers_converence(;K::Integer, config::Dict, FullData, CountryData, country, a, weights)
 
     p = make_subplots(rows=1, 
