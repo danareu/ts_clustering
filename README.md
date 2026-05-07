@@ -2,7 +2,7 @@
 
 > **Time-Series Clustering Framework for [GENeSYS-MOD](https://github.com/GENeSYS-MOD/GENeSYS_MOD.jl)**
 
-Aggregates hourly temporal profiles (e.g., solar PV capacity factors, wind capacity factors, electricity demand) into a set of representative days. Importantly, the input data must follow the given format as outlined in [GENeSYS-MOD.data]( https://github.com/GENeSYS-MOD/GENeSYS_MOD.data)*
+Aggregates hourly temporal profiles (e.g., solar PV capacity factors, wind capacity factors, electricity demand) into a set of representative days. Importantly, the input data must follow the given format as outlined in [GENeSYS-MOD.data]( https://github.com/GENeSYS-MOD/GENeSYS_MOD.data)**
 
 ---
 
@@ -107,7 +107,7 @@ using .TSClustering
 
 **1. Load data**
 
-Hourly profiles are read. A dictionary with the time-series attributes is generated using key_mappings with the correct sheet names.
+# Hourly profiles are read. A dictionary with the time-series attributes is generated using key_mappings which maps the sheet names to attributes 𝓣 .
 
 ```julia
 hourly_data = XLSX.readxlsx(joinpath(inputdir, hourly_data_file * ".xlsx"))
@@ -119,7 +119,7 @@ CountryData = Dict(t => DataFrame(XLSX.gettable(hourly_data[keys_mapping[t]])) f
 ```julia
 data = TSClustering.normalize_data(config=config, CountryData=CountryData)
 
-# With PCA (if Switch.pca_path is set):
+# With PCA (if pca_path is set):
 pca_res = TSClustering.derive_principal_components(config=config, CountryData=CountryData, technology=pca_ts)
 data_clustering = TSClustering.create_clustering_matrix(
     technology=["PCA"],
@@ -141,17 +141,17 @@ D = TSClustering.define_distance(w=warping_window, data_clustering=data_clusteri
 ```julia
 # Hierarchical Ward:
 result = hclust(D, linkage=:ward)
-cl = cutree(result, k=Switch.clusters)
+cl = cutree(result, k=clusters)
 
-# K-Means (when "Kmeans" ∈ Switch.resultdir):
+# K-Means (when "Kmeans" ∈ resultdir):
 Random.Seed(1)
-R = kmeans(data_clustering, Switch.clusters; maxiter=200, display=:iter)
+R = kmeans(data_clustering, clusters; maxiter=200, display=:iter)
 cl = assignments(R)
 ```
 
 **5. Compute representative profiles**
 
-Three methods are available, controlled by `Switch.hoffmann` and `Switch.resultdir`:
+Three methods are available, controlled by `hoffmann` and `resultdir`:
 
 ```julia
 # Hoffmann — optimised hourly distribution per cluster:
@@ -180,10 +180,10 @@ cluster_dict_org = TSClustering.calculate_centroid(
 
 **6. Write outputs**
 
-Set `Switch.write_reduced_timeserie = 1` to write results to:
+Set `write_reduced_timeserie = 1` to write results to:
 
 ```
-{Switch.inputdir}/input_reduced_timeserie_{k}_{resultdir_stem}.xlsx
+{inputdir}/input_reduced_timeseries_{k}_{resultdir_stem}.xlsx
 ```
 
 Sheets written: `SpecifiedDemandProfile`, `CapacityFactor`, `TimeDepEfficiency`, `YearSplit`.
@@ -215,13 +215,13 @@ Agglomerative clustering with Ward's minimum-variance linkage via [Clustering.jl
 
 ### Dynamic Time Warping
 
-DTW allows non-linear temporal alignment, making it more robust than Euclidean distance for renewable profiles that are structurally similar but temporally shifted. `Switch.warping_window` constrains the maximum allowed shift, balancing accuracy against compute time.
+DTW allows non-linear temporal alignment, making it more robust than Euclidean distance for renewable profiles that are structurally similar but temporally shifted. `warping_window` constrains the maximum allowed shift, balancing accuracy against compute time. DTW is implemented via [DynamicAxisWarping.jl](https://github.com/baggepinnen/DynamicAxisWarping.jl).
 
 ### Representative value methods
 
 - **Medoid** — selects the actual day closest to each cluster centre; always produces physically plausible profiles.
 - **Centroid** — averages all days in a cluster; smoother but can produce unrealistic values.
-- **Hoffmann** — solves an optimisation (JuMP + Ipopt) to find the hourly distribution that best preserves the statistical properties of the original data.
+- **Hoffmann** — solves an optimisation (JuMP + Ipopt) to find the hourly distribution that best preserves the statistical properties of the original data. The method was published in https://www.sciencedirect.com/science/article/abs/pii/S0306261922004342
 
 ### Demand profile normalisation
 
@@ -242,7 +242,6 @@ DTW allows non-linear temporal alignment, making it more robust than Euclidean d
 | [MultivariateStats.jl](https://github.com/JuliaStats/MultivariateStats.jl) | PCA |
 | [JuMP.jl](https://github.com/jump-dev/JuMP.jl) + [Ipopt.jl](https://github.com/jump-dev/Ipopt.jl) | Hoffmann optimisation |
 | [PlotlyJS.jl](https://github.com/JuliaPlots/PlotlyJS.jl) | Interactive result visualisation |
-| [SavitzkyGolay.jl](https://github.com/lnacquaroli/SavitzkyGolay.jl) | Optional profile smoothing |
 | [Statistics.jl](https://docs.julialang.org/en/v1/stdlib/Statistics/) | Mean, std, etc. |
 | [DelimitedFiles.jl](https://docs.julialang.org/en/v1/stdlib/DelimitedFiles/) | Text file I/O |
 | [Dates.jl](https://docs.julialang.org/en/v1/stdlib/Dates/) | Runtime benchmarking |
