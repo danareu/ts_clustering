@@ -14,13 +14,10 @@ module TSClustering
     using MultivariateStats
     using Clustering
     using Distances
-    using JuMP
     using YAML
-    #using ColorSchemes
     using PlotlyJS
     using DelimitedFiles
     using DynamicAxisWarping
-    using SavitzkyGolay
 
 
     const DIR = dirname(@__DIR__)
