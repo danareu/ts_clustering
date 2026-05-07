@@ -100,16 +100,16 @@ using Pkg; Pkg.activate(".")
 
 include("TSClustering.jl")
 using .TSClustering
-
+```
 
 
 ### Step-by-step pipeline
 
 **1. Load data**
 
-# Hourly profiles are read. A dictionary with the time-series attributes is generated using key_mappings which maps the sheet names to attributes 𝓣 .
 
 ```julia
+# Hourly profiles are read. A dictionary with the time-series attributes is generated using key_mappings which maps the sheet names to attributes 𝓣
 hourly_data = XLSX.readxlsx(joinpath(inputdir, hourly_data_file * ".xlsx"))
 CountryData = Dict(t => DataFrame(XLSX.gettable(hourly_data[keys_mapping[t]])) for t ∈ 𝓣)
 ```
@@ -221,7 +221,7 @@ DTW allows non-linear temporal alignment, making it more robust than Euclidean d
 
 - **Medoid** — selects the actual day closest to each cluster centre; always produces physically plausible profiles.
 - **Centroid** — averages all days in a cluster; smoother but can produce unrealistic values.
-- **Hoffmann** — solves an optimisation (JuMP + Ipopt) to find the hourly distribution that best preserves the statistical properties of the original data. The method was published in https://www.sciencedirect.com/science/article/abs/pii/S0306261922004342
+- **Hoffmann** — solves an optimisation to find the hourly distribution that best preserves the statistical properties of the original data. The method was published in https://www.sciencedirect.com/science/article/abs/pii/S0306261922004342
 
 ### Demand profile normalisation
 
@@ -240,7 +240,6 @@ DTW allows non-linear temporal alignment, making it more robust than Euclidean d
 | [XLSX.jl](https://github.com/felipenoris/XLSX.jl) | Input/output Excel files |
 | [YAML.jl](https://github.com/JuliaData/YAML.jl) | Configuration parsing |
 | [MultivariateStats.jl](https://github.com/JuliaStats/MultivariateStats.jl) | PCA |
-| [JuMP.jl](https://github.com/jump-dev/JuMP.jl) + [Ipopt.jl](https://github.com/jump-dev/Ipopt.jl) | Hoffmann optimisation |
 | [PlotlyJS.jl](https://github.com/JuliaPlots/PlotlyJS.jl) | Interactive result visualisation |
 | [Statistics.jl](https://docs.julialang.org/en/v1/stdlib/Statistics/) | Mean, std, etc. |
 | [DelimitedFiles.jl](https://docs.julialang.org/en/v1/stdlib/DelimitedFiles/) | Text file I/O |
