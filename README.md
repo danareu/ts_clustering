@@ -2,7 +2,7 @@
 
 > **Time-Series Clustering Framework for [GENeSYS-MOD](https://github.com/GENeSYS-MOD/GENeSYS_MOD.jl)**
 
-Aggregates high-resolution temporal profiles (solar PV capacity factors, wind capacity factors, electricity demand) into a compact set of representative periods, making large-scale energy system optimisation tractable without sacrificing temporal diversity.
+Aggregates hourly temporal profiles (e.g., solar PV capacity factors, wind capacity factors, electricity demand) into a set of representative days. Importantly, the input data must follow the given format as outlined in [GENeSYS-MOD.data]( https://github.com/GENeSYS-MOD/GENeSYS_MOD.data)*
 
 ---
 
@@ -17,15 +17,12 @@ Aggregates high-resolution temporal profiles (solar PV capacity factors, wind ca
 - [Methodology](#methodology)
 - [Outputs](#outputs)
 - [Dependencies](#dependencies)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [Citation](#citation)
 
 ---
 
 ## Background
 
-Energy system models like GENeSYS-MOD require full-year hourly profiles (8,760 time steps) as inputs. Solving an optimisation at this resolution is computationally prohibitive. Time-series clustering reduces those 8,760 hours to a small set of *k* representative periods while preserving key statistical properties of the original profiles — seasonal patterns, peak demand, and the correlation between generation and consumption.
+Energy system models like GENeSYS-MOD require full-year hourly profiles (8,760 time steps) as inputs. Solving an optimisation at this resolution is computationally expensive. Time-series clustering reduces those 8,760 hours to a small set of *k* representative periods while preserving key statistical properties of the original profiles.
 
 ---
 
@@ -37,7 +34,6 @@ Energy system models like GENeSYS-MOD require full-year hourly profiles (8,760 t
 | **Distance metric** | Euclidean, Dynamic Time Warping (DTW) |
 | **DTW implementation** | FastDTW (approximate), Dynamic Programming (exact) |
 | **Normalisation** | z-score (optional) |
-| **Pre-processing** | Savitzky–Golay smoothing (optional) |
 | **Visualisation** | Interactive plots via PlotlyJS |
 | **Input format** | XLSX |
 | **Configuration** | YAML |
@@ -77,9 +73,6 @@ using Pkg
 Pkg.activate(".")
 Pkg.instantiate()
 ```
-
-`Pkg.instantiate()` will download and precompile all required packages from the locked versions in `Manifest.toml`. This may take a few minutes on first run.
-
 ---
 
 ## Configuration
@@ -87,24 +80,18 @@ Pkg.instantiate()
 Runs are controlled by a YAML configuration file:
 
 ```yaml
-n_clusters:    12          # Number of representative periods to generate
-normalization: true        # Apply z-score normalisation before clustering
-algorithm:     ward        # "ward" | "complete"
-distance:      euclidean   # "euclidean" | "fastdtw" | "dp"
-data_path:     data/profiles.xlsx
-output_path:   results/
+Country_Data_Entries: # the attributes in the xlsx files for which representative periods should be found
+  - TS_LOAD
+  - TS_PV_AVG          
+Clustering: # the attributes in the xlsx files that should be used for the clustering algorithm
+  - TS_LOAD
+  - TS_PV_AVG
+countries: # the country profiles for each attribute that should be considered
+  - DE
+SCTOLERANCE: 10.0e-6 # the max. accuracy between the mean of the aggregated and the original time-series
+Load: # the profiles that represent a load and are therefore normalized 
+  - TS_LOAD
 ```
-
-| Parameter | Description |
-|---|---|
-| `n_clusters` | Number of clusters *k* |
-| `normalization` | Standardise profiles to zero mean / unit variance before computing distances |
-| `algorithm` | Linkage method for hierarchical clustering |
-| `distance` | Distance metric used to build the dissimilarity matrix |
-| `data_path` | Path to the XLSX input file |
-| `output_path` | Directory for output files and plots |
-
----
 
 ## Usage
 
@@ -114,58 +101,131 @@ using Pkg; Pkg.activate(".")
 include("TSClustering.jl")
 using .TSClustering
 
-TSClustering.run_clustering("config.yaml")
+
+
+### Step-by-step pipeline
+
+**1. Load data**
+
+Hourly profiles are read. A dictionary with the time-series attributes is generated using key_mappings with the correct sheet names.
+
+```julia
+hourly_data = XLSX.readxlsx(joinpath(inputdir, hourly_data_file * ".xlsx"))
+CountryData = Dict(t => DataFrame(XLSX.gettable(hourly_data[keys_mapping[t]])) for t ∈ 𝓣)
 ```
 
-### Choosing an algorithm
+**2. Normalise & build the clustering matrix**
 
-| Method | When to use |
-|---|---|
-| `ward` | Default. Minimises within-cluster variance; produces compact, evenly sized clusters. |
-| `complete` | Maximises separation between clusters; useful when outlier robustness matters more than compactness. |
+```julia
+data = TSClustering.normalize_data(config=config, CountryData=CountryData)
 
-### Choosing a distance metric
+# With PCA (if Switch.pca_path is set):
+pca_res = TSClustering.derive_principal_components(config=config, CountryData=CountryData, technology=pca_ts)
+data_clustering = TSClustering.create_clustering_matrix(
+    technology=["PCA"],
+    CountryData=Dict("PCA" => DataFrame(Matrix(pca_res), :auto))
+)
 
-| Metric | Speed | Best for |
+# Without PCA — seasonal profiles excluded from the clustering matrix:
+data_clustering = TSClustering.create_clustering_matrix(technology=setdiff(𝓣, seasonal), CountryData=data)
+```
+
+**3. Compute the distance matrix**
+
+```julia
+D = TSClustering.define_distance(w=warping_window, data_clustering=data_clustering, fast_dtw=false)
+```
+
+**4. Cluster**
+
+```julia
+# Hierarchical Ward:
+result = hclust(D, linkage=:ward)
+cl = cutree(result, k=Switch.clusters)
+
+# K-Means (when "Kmeans" ∈ Switch.resultdir):
+Random.Seed(1)
+R = kmeans(data_clustering, Switch.clusters; maxiter=200, display=:iter)
+cl = assignments(R)
+```
+
+**5. Compute representative profiles**
+
+Three methods are available, controlled by `Switch.hoffmann` and `Switch.resultdir`:
+
+```julia
+# Hoffmann — optimised hourly distribution per cluster:
+sc1 = TSClustering.calculate_representative_value_distribution(
+    data_org=filter(kv -> kv[1] ∉ seasonal, CountryData), cl=cl, config=config, K=clusters
+)
+
+# Medoid — most central day per cluster (default):
+cluster_dict_org = TSClustering.calculate_medoid(
+    data_org=CountryData, cl=cl, config=config, K=clusters, technology=𝓣
+)
+sc = TSClustering.scaling(
+    data_org=CountryData, scaled_clusters=cluster_dict_org,
+    k=clusters, weights=weights, config=config, technology=𝓣
+)
+
+# Centroid — mean profile per cluster:
+cluster_dict_org = TSClustering.calculate_centroid(
+    data_org=CountryData, cl=cl, config=config, K=clusters, technology=𝓣
+)
+```
+
+> **Seasonal profiles:** Technologies listed in `seasonal` are always represented via medoid and are excluded from the DTW clustering step. They are handled separately via `TSClustering.scaling` after the main clustering is done.
+
+> **Heat pumps:** `HLR_Heatpump_Aerial` and `HLR_Heatpump_Ground` are written to `TimeDepEfficiency` rather than `CapacityFactor`, reflecting their time-dependent COP.
+
+**6. Write outputs**
+
+Set `Switch.write_reduced_timeserie = 1` to write results to:
+
+```
+{Switch.inputdir}/input_reduced_timeserie_{k}_{resultdir_stem}.xlsx
+```
+
+Sheets written: `SpecifiedDemandProfile`, `CapacityFactor`, `TimeDepEfficiency`, `YearSplit`.
+
+---
+
+
+
+## Outputs
+
+The pipeline returns the following JuMP `DenseAxisArray` objects:
+
+| Return value | Axes | Description |
 |---|---|---|
-| `euclidean` | Fast | Profiles that are already temporally aligned |
-| `fastdtw` | Moderate | Large datasets with mild temporal shifts |
-| `dp` | Slow | Small datasets where exact DTW accuracy is required |
-
-### Normalisation
-
-Enable `normalization: true` when your input contains profiles on different scales (e.g., demand in MW alongside 0–1 capacity factors). Disable it when all profiles are already on the same scale and you want to cluster on absolute values.
+| `SpecifiedDemandProfile` | `[Region, Fuel, Timeslice, Year]` | Normalised hourly demand profiles; each cluster's 24 values sum to `weights[k] / 365` |
+| `CapacityFactor` | `[Region, Technology, Timeslice, Year]` | Hourly capacity factors for renewable technologies |
+| `TimeDepEfficiency` | `[Region, Technology, Timeslice, Year]` | Time-dependent COP for heat pumps |
+| `YearSplit` | `[Timeslice, Year]` | Fraction of the year per timeslice (`weights[k] / 8760`, repeated 24× per cluster) |
+| `cl` | `Vector{Int}` | Cluster assignment for each of the 365 input days |
+| `weights` | `Dict{Int, Int}` | Number of days assigned to each cluster (sums to 365) |
 
 ---
 
 ## Methodology
 
-### Hierarchical Clustering
+### Hierarchical clustering (default)
 
-The framework uses **agglomerative** hierarchical clustering (via [Clustering.jl](https://github.com/JuliaStats/Clustering.jl)). Starting with every time period as its own cluster, it iteratively merges the two closest clusters until *k* remain. The full merge history is captured in a dendrogram, which can guide selection of *k* via the elbow method.
+Agglomerative clustering with Ward's minimum-variance linkage via [Clustering.jl](https://github.com/JuliaStats/Clustering.jl). A full 365×365 DTW distance matrix is computed once and the resulting tree is cut at depth *k*.
 
 ### Dynamic Time Warping
 
-DTW allows non-linear alignment between time series, matching peaks that occur at slightly different times. This makes it more robust than Euclidean distance when comparing renewable generation profiles that are structurally similar but temporally shifted. FastDTW achieves linear time and space complexity through a multi-resolution approximation; the DP variant computes exact distances using standard dynamic programming.
+DTW allows non-linear temporal alignment, making it more robust than Euclidean distance for renewable profiles that are structurally similar but temporally shifted. `Switch.warping_window` constrains the maximum allowed shift, balancing accuracy against compute time.
 
-### Savitzky–Golay Smoothing
+### Representative value methods
 
-An optional Savitzky–Golay filter (polynomial fitting over a sliding window) can be applied before clustering to remove high-frequency noise from wind and PV profiles while preserving the underlying shape.
+- **Medoid** — selects the actual day closest to each cluster centre; always produces physically plausible profiles.
+- **Centroid** — averages all days in a cluster; smoother but can produce unrealistic values.
+- **Hoffmann** — solves an optimisation (JuMP + Ipopt) to find the hourly distribution that best preserves the statistical properties of the original data.
 
----
+### Demand profile normalisation
 
-## Outputs
-
-After a run, the following are written to `output_path`:
-
-- **Representative profiles** — one aggregated time-series per cluster (medoid or mean)
-- **Weights** — number of original hours each representative period stands for (sum = 8,760 for annual data)
-- **XLSX tables** — formatted for direct import into GENeSYS-MOD
-- **Interactive plots** — HTML files (open in any browser) including:
-  - Dendrogram
-  - Cluster assignments over time
-  - Original vs. representative profile overlay
-  - Within-cluster variance vs. *k* (elbow plot)
+`SpecifiedDemandProfile` values within each cluster are normalised so the 24 hourly values sum to `weights[k] / 365`, preserving each cluster's correct share of annual energy. Any `NaN` values from zero-sum clusters are set to zero with a warning.
 
 ---
 
@@ -173,58 +233,18 @@ After a run, the following are written to `output_path`:
 
 | Package | Role |
 |---|---|
-| [Clustering.jl](https://github.com/JuliaStats/Clustering.jl) | Hierarchical clustering algorithms |
-| [Distances.jl](https://github.com/JuliaStats/Distances.jl) | Euclidean and other distance metrics |
-| [DynamicAxisWarping.jl](https://github.com/baggepinnen/DynamicAxisWarping.jl) | FastDTW and DP-DTW |
+| [Clustering.jl](https://github.com/JuliaStats/Clustering.jl) | `hclust`, `cutree`, `kmeans` |
+| [Distances.jl](https://github.com/JuliaStats/Distances.jl) | Distance metric primitives |
+| [DynamicAxisWarping.jl](https://github.com/baggepinnen/DynamicAxisWarping.jl) | DTW distance computation |
 | [DataFrames.jl](https://github.com/JuliaData/DataFrames.jl) | Tabular data manipulation |
-| [XLSX.jl](https://github.com/felipenoris/XLSX.jl) | Excel I/O |
+| [XLSX.jl](https://github.com/felipenoris/XLSX.jl) | Input/output Excel files |
 | [YAML.jl](https://github.com/JuliaData/YAML.jl) | Configuration parsing |
-| [MultivariateStats.jl](https://github.com/JuliaStats/MultivariateStats.jl) | Multivariate statistics |
-| [PlotlyJS.jl](https://github.com/JuliaPlots/PlotlyJS.jl) | Interactive HTML visualisations |
-| [SavitzkyGolay.jl](https://github.com/lnacquaroli/SavitzkyGolay.jl) | Profile smoothing |
-| [JuMP.jl](https://github.com/jump-dev/JuMP.jl) + [Ipopt.jl](https://github.com/jump-dev/Ipopt.jl) | Optimisation in post-processing |
-| [Statistics.jl](https://docs.julialang.org/en/v1/stdlib/Statistics/) | Standard statistical functions |
-| [DelimitedFiles.jl](https://docs.julialang.org/en/v1/stdlib/DelimitedFiles/) | CSV-style file I/O |
+| [MultivariateStats.jl](https://github.com/JuliaStats/MultivariateStats.jl) | PCA |
+| [JuMP.jl](https://github.com/jump-dev/JuMP.jl) + [Ipopt.jl](https://github.com/jump-dev/Ipopt.jl) | Hoffmann optimisation |
+| [PlotlyJS.jl](https://github.com/JuliaPlots/PlotlyJS.jl) | Interactive result visualisation |
+| [SavitzkyGolay.jl](https://github.com/lnacquaroli/SavitzkyGolay.jl) | Optional profile smoothing |
+| [Statistics.jl](https://docs.julialang.org/en/v1/stdlib/Statistics/) | Mean, std, etc. |
+| [DelimitedFiles.jl](https://docs.julialang.org/en/v1/stdlib/DelimitedFiles/) | Text file I/O |
+| [Dates.jl](https://docs.julialang.org/en/v1/stdlib/Dates/) | Runtime benchmarking |
 
 ---
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `Pkg.instantiate()` fails | Check internet access; run `Pkg.update()` to refresh the General registry and retry. |
-| XLSX file not found | Verify `data_path` in your config matches the actual file location relative to the project root. |
-| Clustering returns 1 cluster | Confirm `n_clusters > 1` and that the input contains more than one distinct time period. |
-| Plots don't display | PlotlyJS generates HTML files — open them in a web browser. |
-| DTW is very slow | Switch from `dp` to `fastdtw`, or aggregate to daily resolution before clustering. |
-| Out-of-memory errors | Reduce the number of simultaneous profiles, or switch to `euclidean` distance. |
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch from `main`
-3. Make your changes and add tests where applicable
-4. Open a pull request with a description of what changed and why
-
-Please follow [Julia style conventions](https://docs.julialang.org/en/v1/manual/style-guide/) and add any new dependencies to `Project.toml`.
-
----
-
-## Citation
-
-If you use this framework in your research, please cite:
-
-```bibtex
-@software{reulein2023tsclustering,
-  author  = {Reulein, Dana},
-  title   = {ts\_clustering: Time-Series Clustering Framework for GENeSYS-MOD},
-  year    = {2023},
-  url     = {https://github.com/danareu/ts_clustering}
-}
-```
-
----
-
-*Developed by [Dana Reulein](https://github.com/danareu), 2023.*
