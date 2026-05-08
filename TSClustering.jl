@@ -17,6 +17,7 @@ module TSClustering
     using YAML
     using PlotlyJS
     using DelimitedFiles
+    using JuMP
     using DynamicAxisWarping
 
 
