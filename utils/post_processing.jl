@@ -287,3 +287,49 @@ function calculate_correlation(;
     end
     return tmp/counter
 end
+
+
+
+
+function calculate_tail_rmse(;
+    cluster_dict::JuMP.Containers.DenseAxisArray,
+    data_org::Dict,
+    weight::Dict,
+    techs::Vector{},
+    config::Dict)
+
+    mae_low_list  = Float64[]
+
+    println("Tail MAE diagnostics (normalized by range):")
+    for t ∈ techs, r ∈ axes(cluster_dict)[1]
+        if sum(vcat(cluster_dict[r,t,:,:])) > 0
+
+            z_hat = upsample_time_series(
+                weight=weight,
+                cluster_dict=cluster_dict,
+                technology=t,
+                region=r,
+                tot_sum=false,
+                config=config
+            )
+            z_org = data_org[t][:, r]
+            n = length(z_org)
+
+            # Sort both series in descending order for load duration curve comparison
+            z_org = sort(z_org, rev=true)
+            #z_org = z_org[n - 438 + 1:n]
+            z_org = z_org[1:438]
+            z_hat = sort(z_hat, rev=true)
+            #z_hat = z_hat[n - 438 + 1:n]
+            z_hat = z_hat[1:438]
+
+            # compute euclidean Distance
+            distance = mean(abs.(z_org - z_hat))
+            push!(mae_low_list, distance)
+        end
+    end
+
+    avg_mae_low  = mean(mae_low_list)
+
+    return avg_mae_low
+end
