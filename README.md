@@ -221,7 +221,7 @@ DTW allows non-linear temporal alignment, making it more robust than Euclidean d
 
 - **Medoid** — selects the actual day closest to each cluster centre; always produces physically plausible profiles.
 - **Centroid** — averages all days in a cluster; smoother but can produce unrealistic values.
-- **Hoffmann** — solves an optimisation to find the hourly distribution that best preserves the statistical properties of the original data. The method was published in https://www.sciencedirect.com/science/article/abs/pii/S0306261922004342
+- **Hoffmann** — selects the representative which finds the hourly distribution that best preserves the statistical properties of the original data. The method was published in https://www.sciencedirect.com/science/article/abs/pii/S0306261922004342
 
 ### Demand profile normalisation
 
